@@ -28,13 +28,22 @@ ALGORITHM = "custom_net"
 #ALGORITHM = "tf_net"
 
 class NeuralNetwork_2Layer():
-    def __init__(self, inputSize, outputSize, neuronsPerLayer, learningRate = 0.1):
+    def __init__(self, inputSize, outputSize, neuronsPerLayer, learningRate = 0.1, activation = 'sigmoid'):
         self.inputSize = inputSize
         self.outputSize = outputSize
         self.neuronsPerLayer = neuronsPerLayer
         self.lr = learningRate
         self.W1 = np.random.randn(self.inputSize, self.neuronsPerLayer)
         self.W2 = np.random.randn(self.neuronsPerLayer, self.outputSize)
+        if activation.lower() == 'sigmoid':
+          self.activation = self.__sigmoid
+          self.activationDerivative = self.__sigmoidDerivative
+        elif activation.lower() == 'relu':
+          self.activation = self.__relu
+          self.activationDerivative = self.__reluDerivative
+        else:
+          raise ValueError('Activation function not recognized')
+
 
     # Activation function.
     def __sigmoid(self, x):
@@ -42,8 +51,17 @@ class NeuralNetwork_2Layer():
 
     # Activation prime function.
     def __sigmoidDerivative(self, x):
-        #return self.__sigmoid(x) * (1 - self.__sigmoid(x))
-        return x * (1 - x)  # assume that the inputted x is already activated
+        return self.__sigmoid(x) * (1 - self.__sigmoid(x))
+        #return x * (1 - x)  # assume that the inputted x is already activated
+
+    def __relu(self, x):
+        x[x < 0] = 0
+        return x
+
+    def __reluDerivative(self, x):
+        x[x < 0] = 0
+        x[x > 0] = 1
+        return x
 
     # Batch generator for mini-batches. Not randomized.
     def __batchGenerator(self, l, n):
@@ -70,15 +88,15 @@ class NeuralNetwork_2Layer():
     # Forward pass.
     def __forward(self, input):
         z2 = np.dot(input, self.W1) # n x j matrix representing net output of layer 1 before fed into sigmoid
-        a2 = self.__sigmoid(z2)     # n x j matrix of activity of layer 2
+        a2 = self.activation(z2)     # n x j matrix of activity of layer 2
 
         z3 = np.dot(a2, self.W2)    # n x k matrix representing net output of layer 2 before fed into sigmoid
-        a3 = self.__sigmoid(z3)     # n x k matrix of activity of layer 3 (predicted output)
-        return a2, a3
+        a3 = self.activation(z3)     # n x k matrix of activity of layer 3 (predicted output)
+        return z2, a2, z3, a3
 
     # Predict.
     def predict(self, xVals):
-        _, yHat = self.__forward(xVals)
+        _, _, _, yHat = self.__forward(xVals)
         prediction = np.zeros_like(yHat)
         prediction[np.arange(len(yHat)), yHat.argmax(1)] = 1
         return prediction
@@ -89,16 +107,16 @@ class NeuralNetwork_2Layer():
 
     # Back propagate.
     def __backpropagate(self, x, y):
-      a2, yHat = self.__forward(x)
+      z2, a2, z3, yHat = self.__forward(x)
       n = np.shape(y)[0]
 
-      #l2e = np.multiply((yHat - y) / n, self.__sigmoidDerivative(z3))
-      l2e = np.multiply((yHat - y) / n, self.__sigmoidDerivative(yHat))
+      l2e = np.multiply((yHat - y) / n, self.__sigmoidDerivative(z3))
+      #l2e = np.multiply((yHat - y) / n, self.activationDerivative(yHat))
       l2d = np.dot(a2.T, l2e)
 
       #l1e = np.multiply(np.dot(l2e, self.W2.T), self.__sigmoidDerivative(z2))
-      #l1e = np.dot(l2e, self.W2.T) * self.__sigmoidDerivative(z2)
-      l1e = np.dot(l2e, self.W2.T) * self.__sigmoidDerivative(a2)
+      l1e = np.dot(l2e, self.W2.T) * self.__sigmoidDerivative(z2)
+      #l1e = np.dot(l2e, self.W2.T) * self.activationDerivative(a2)
       l1d = np.dot(x.T, l1e)
 
       return (l1d, l2d)
@@ -145,17 +163,25 @@ def preprocessData(raw):
 
 def trainModel(data):
     xTrain, yTrain = data
+    EPOCHS = 50
+    HIDDEN_NEURONS = 20
+    BATCH_SIZE = 100
     if ALGORITHM == "guesser":
         return None   # Guesser has no model, as it is just guessing.
     elif ALGORITHM == "custom_net":
         print("Building and training Custom_NN.")
-        nn = NeuralNetwork_2Layer(IMAGE_SIZE, NUM_CLASSES, 20)
-        nn.train(xTrain, yTrain, 500)
+        #nn = NeuralNetwork_2Layer(IMAGE_SIZE, NUM_CLASSES, HIDDEN_NEURONS, activation='ReLU')
+        nn = NeuralNetwork_2Layer(IMAGE_SIZE, NUM_CLASSES, HIDDEN_NEURONS)
+        nn.train(xTrain, yTrain, EPOCHS)
         return nn
     elif ALGORITHM == "tf_net":
         print("Building and training TF_NN.")
-        print("Not yet implemented.")                   #TODO: Write code to build and train your keras neural net.
-        return None
+        model = tf.keras.models.Sequential([tf.keras.layers.Flatten(),
+                                            tf.keras.layers.Dense(HIDDEN_NEURONS, activation=tf.nn.sigmoid),
+                                            tf.keras.layers.Dense(NUM_CLASSES, activation=tf.nn.sigmoid)])
+        model.compile(optimizer='adam', loss='mean_squared_error', metrics=['accuracy'])
+        model.fit(xTrain, yTrain, batch_size=BATCH_SIZE, epochs=EPOCHS)
+        return model
     else:
         raise ValueError("Algorithm not recognized.")
 
@@ -169,20 +195,43 @@ def runModel(data, model):
         return model.predict(data)
     elif ALGORITHM == "tf_net":
         print("Testing TF_NN.")
-        return None
+        yHat = model.predict(data)
+        prediction = np.zeros_like(yHat)
+        prediction[np.arange(len(yHat)), yHat.argmax(1)] = 1
+        return prediction
     else:
         raise ValueError("Algorithm not recognized.")
 
 
+def calcF1Score(precision, recall):
+  return 2 * ((precision * recall) / (precision + recall)) if precision > 0 and recall > 0 else 0
 
 def evalResults(data, preds):   #TODO: Add F1 score confusion matrix here.
     xTest, yTest = data
     acc = 0
+    confusionMatrix = np.zeros((NUM_CLASSES + 1, NUM_CLASSES + 1))
     for i in range(preds.shape[0]):
-        if np.array_equal(preds[i], yTest[i]):   acc = acc + 1
+        predictedValue = np.argmax(preds[i])
+        actualValue = np.argmax(yTest[i])
+        if np.array_equal(preds[i], yTest[i]):  acc += 1
+        confusionMatrix[predictedValue][actualValue] += 1   # Update matrix
+        confusionMatrix[predictedValue][NUM_CLASSES] += 1   # Update total predicted count for this digit
+        confusionMatrix[NUM_CLASSES][actualValue] += 1      # Update total actual count for this digit
     accuracy = acc / preds.shape[0]
+    f1Matrix = np.zeros((NUM_CLASSES, NUM_CLASSES))
+    for r in range(NUM_CLASSES):
+      for c in range(NUM_CLASSES):
+        if r == c:
+          precision = confusionMatrix[r][c] / confusionMatrix[r][NUM_CLASSES]
+          recall = confusionMatrix[r][c] / confusionMatrix[NUM_CLASSES][c]
+          f1Matrix[r][c] = calcF1Score(precision, recall)
+        else:
+          f1Matrix[r][c] = np.nan
+    np.set_printoptions(formatter={'int': '{.6f}'.format}, precision=4, suppress=True)
     print("Classifier algorithm: %s" % ALGORITHM)
     print("Classifier accuracy: %f%%" % (accuracy * 100))
+    print("Classifier confusion matrix:\n", confusionMatrix)
+    print("Classifier F1 score matrix:\n", f1Matrix)
     print()
 
 
