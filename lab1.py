@@ -26,8 +26,8 @@ NUM_CLASSES = 10
 IMAGE_SIZE = 784
 
 # Net parameters
-EPOCHS = 500
-HIDDEN_NEURONS = 5
+EPOCHS = 100
+HIDDEN_NEURONS = 20
 BATCH_SIZE = 100
 ACTIVATION = 'sigmoid'
 
@@ -37,7 +37,7 @@ ALGORITHM = "custom_net"
 #ALGORITHM = "tf_net"
 
 # Toggle error plotting.
-PLOT_ERROR = False
+PLOT_ERROR = True
 
 class NeuralNetwork_2Layer():
     def __init__(self, inputSize, outputSize, neuronsPerLayer, learningRate = 0.1, activation = ACTIVATION):
@@ -64,7 +64,6 @@ class NeuralNetwork_2Layer():
     # Activation prime function.
     def __sigmoidDerivative(self, x):
         return self.__sigmoid(x) * (1 - self.__sigmoid(x))
-        #return x * (1 - x)  # assume that the inputted x is already activated
 
     def __relu(self, x):
         x[x < 0] = 0
@@ -80,41 +79,63 @@ class NeuralNetwork_2Layer():
         for i in range(0, len(l), n):
             yield l[i : i + n]
 
+    # Plots training and validation error over time
+    def __plotLearningCurve(self, error):
+        x = [i + 1 for i in range(numEpochs)]
+        plt.ylim(0, 1)
+        plt.plot(x, error['train'], color = 'blue', label = 'training error')
+        plt.axhline(y=error['train'][-1], color='purple', ls='--', label='y=%s' % round(error['train'][-1], 4))
+        plt.plot(x, error['valid'], color = 'red', label = 'validation error')
+        plt.axhline(y=error['valid'][-1], color = 'orange', ls='--', label='y=%s' % round(error['valid'][-1], 4))
+        plt.xlabel('epoch')
+        plt.ylabel('mean MSE across all classes')
+        plt.title('NN Learning Curve, %s Hidden Neurons' % hiddenNeurons)
+        plt.legend()
+        plt.savefig('./assets/error-%s-%s.png' % (hiddenNeurons, numEpochs))
+
+
     # Training with backpropagation.
     def train(self, xVals, yVals, epochs = EPOCHS, minibatches = True, mbs = BATCH_SIZE):
         print('HYPERPARAMETERS:\n\tnet: %s\tepochs: %s\tbatchSize: %s\thiddenSize: %s\tactivation: %s\n' %
               (algorithm, numEpochs, batchSize, hiddenNeurons, activationFunction))
-        error = list()
+        error = {'train': [], 'valid': []}
         for i in range(epochs):
           print("epoch:", i)
+          # Split data into training and validation set
+          proportion = 0.1
+          partition = int(proportion * len(yVals))      # Get partition index
+          indices = np.random.permutation(len(yVals))   # Get shuffled indices
+          xValsShuffled = xVals[indices, :]             # Shuffle xVals
+          yValsShuffled = yVals[indices]                # Shuffle yVals, still aligned with xVals
+          xTrain = xValsShuffled[partition:]            # Take 1-proportion entities as training
+          yTrain = yValsShuffled[partition:]
+          xValid = xValsShuffled[:partition]            # Take proportion entities as validation
+          yValid = yValsShuffled[:partition]
+
           if minibatches == True:
-            xBatches, yBatches = self.__batchGenerator(xVals, mbs), self.__batchGenerator(yVals, mbs)
+            xBatches, yBatches = self.__batchGenerator(xTrain, mbs), self.__batchGenerator(yTrain, mbs)
             for xBatch, yBatch in zip(xBatches, yBatches):
               (l1d, l2d) = self.__backpropagate(xBatch, yBatch)
               self.W1 -= self.lr * l1d
               self.W2 -= self.lr * l2d
-          # decay learning rate
-          self.lr -= 0.0002
+          else:
+            (l1d, l2d) = self.__backpropagate(xTrain, yTrain)
+            self.W1 -= self.lr * l1d
+            self.W2 -= self.lr * l2d
           if PLOT_ERROR:
-            error.append(self.__calculateError(yVals, self.predict(xVals)))
+            error['train'].append(self.__calculateError(yTrain, self.predict(xTrain)))
+            error['valid'].append(self.__calculateError(yValid, self.predict(xValid)))
 
         if PLOT_ERROR:
-          x = [i + 1 for i in range(epochs)]
-          plt.ylim(0, 1)
-          plt.plot(x, error, color = 'blue', label = 'training error')
-          plt.axhline(y=error[-1], color='red', ls='--', label='y=%s' % round(error[-1], 4))
-          plt.xlabel('epoch')
-          plt.ylabel('mean MSE across all classes')
-          plt.title('NN Learning Curve, %s Hidden Neurons' % HIDDEN_NEURONS)
-          plt.legend()
-          plt.savefig('./assets/error-%s-%s.png' % (HIDDEN_NEURONS, EPOCHS))
+          self.__plotLearningCurve(error)
 
     # Forward pass.
     def __forward(self, input):
-        z2 = np.dot(input, self.W1)  # n x j matrix representing net output of layer 1 before fed into sigmoid
+        # i inputs, j hidden neurons, k outputs, n entities
+        z2 = np.dot(input, self.W1)  # n x j matrix representing net output of layer 1 before fed into activation
         a2 = self.activation(z2)     # n x j matrix of activity of layer 2
 
-        z3 = np.dot(a2, self.W2)     # n x k matrix representing net output of layer 2 before fed into sigmoid
+        z3 = np.dot(a2, self.W2)     # n x k matrix representing net output of layer 2 before fed into activation
         a3 = self.activation(z3)     # n x k matrix of activity of layer 3 (predicted output)
         return z2, a2, z3, a3
 
@@ -189,7 +210,6 @@ def trainModel(data):
         return None   # Guesser has no model, as it is just guessing.
     elif algorithm == "custom_net":
         print("Building and training Custom_NN.")
-        #nn = NeuralNetwork_2Layer(IMAGE_SIZE, NUM_CLASSES, HIDDEN_NEURONS, activation='ReLU')
         nn = NeuralNetwork_2Layer(IMAGE_SIZE, NUM_CLASSES, hiddenNeurons, activation=activationFunction)
         nn.train(xTrain, yTrain, epochs=numEpochs, mbs=batchSize)
         return nn
@@ -197,7 +217,7 @@ def trainModel(data):
         print("Building and training TF_NN.")
         model = tf.keras.models.Sequential([tf.keras.layers.Flatten(),
                                             tf.keras.layers.Dense(hiddenNeurons, activation=tf.nn.sigmoid),
-                                            tf.keras.layers.Dense(NUM_CLASSES, activation=tf.nn.sigmoid)])
+                                            tf.keras.layers.Dense(NUM_CLASSES, activation=tf.nn.softmax)])
         model.compile(optimizer='adam', loss='mean_squared_error', metrics=['accuracy'])
         model.fit(xTrain, yTrain, validation_split=0.1, batch_size=batchSize, epochs=numEpochs, shuffle=True)
         return model
@@ -215,6 +235,7 @@ def runModel(data, model):
     elif algorithm == "tf_net":
         print("Testing TF_NN.")
         yHat = model.predict(data)
+        # Convert prediction into single class output
         prediction = np.zeros_like(yHat)
         prediction[np.arange(len(yHat)), yHat.argmax(1)] = 1
         return prediction
@@ -227,6 +248,7 @@ def calcF1Score(precision, recall):
 
 def evalResults(data, preds):   #TODO: Add F1 score confusion matrix here.
     xTest, yTest = data
+    # Create confusion matrix
     acc = 0
     confusionMatrix = np.zeros((NUM_CLASSES + 1, NUM_CLASSES + 1))
     for i in range(preds.shape[0]):
@@ -238,15 +260,18 @@ def evalResults(data, preds):   #TODO: Add F1 score confusion matrix here.
         confusionMatrix[NUM_CLASSES][actualValue] += 1      # Update total actual count for this digit
     confusionMatrix[NUM_CLASSES][NUM_CLASSES] = sum(confusionMatrix[NUM_CLASSES])
     accuracy = acc / preds.shape[0]
+
+    # Calculate F1 scores based off of confusion matrix
     f1Matrix = np.zeros((NUM_CLASSES, NUM_CLASSES))
     for r in range(NUM_CLASSES):
       for c in range(NUM_CLASSES):
-        if r == c:
+        if r == c:  # F1 score only makes sense by class
           precision = confusionMatrix[r][c] / confusionMatrix[r][NUM_CLASSES]
           recall = confusionMatrix[r][c] / confusionMatrix[NUM_CLASSES][c]
           f1Matrix[r][c] = calcF1Score(precision, recall)
         else:
           f1Matrix[r][c] = np.nan
+
     np.set_printoptions(formatter={'int': '{.6f}'.format}, precision=4, suppress=True)
     print("Classifier algorithm: %s" % algorithm)
     print("Classifier accuracy: %f%%" % (accuracy * 100))
@@ -268,6 +293,7 @@ def main():
 
 
 if __name__ == '__main__':
+    # Accept CLI args to define hyperparameters
     algorithm = ALGORITHM
     numEpochs = EPOCHS
     batchSize = BATCH_SIZE
@@ -306,7 +332,8 @@ if __name__ == '__main__':
             \t-a [algorithm | custom_net, tf_net])\n\
             \t-e [number of epochs]\n\
             \t-b [batch size]\n\
-            \t-n [number of hidden neurons]')
+            \t-n [number of hidden neurons]\n\
+            \t-f [activation function | sigmoid, relu')
           sys.exit()
       except SystemExit as se:
         raise
