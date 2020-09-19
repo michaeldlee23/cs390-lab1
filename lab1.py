@@ -7,11 +7,14 @@ from tensorflow.keras.utils import to_categorical
 import random
 import matplotlib.pyplot as plt
 
+# Full print numpy
+np.set_printoptions(threshold=np.inf)
+np.set_printoptions(linewidth=np.inf)
 
 # Setting random seeds to keep everything deterministic.
 random.seed(1618)
 np.random.seed(1618)
-#tf.set_random_seed(1618)   # Uncomment for TF1.
+# tf.set_random_seed(1618)   # Uncomment for TF1.
 tf.random.set_seed(1618)
 
 # Disable some troublesome logging.
@@ -26,17 +29,18 @@ IMAGE_SIZE = 784
 EPOCHS = 500
 HIDDEN_NEURONS = 5
 BATCH_SIZE = 100
+ACTIVATION = 'sigmoid'
 
 # Use these to set the algorithm to use.
 #ALGORITHM = "guesser"
-#ALGORITHM = "custom_net"
-ALGORITHM = "tf_net"
+ALGORITHM = "custom_net"
+#ALGORITHM = "tf_net"
 
 # Toggle error plotting.
-PLOT_ERROR = True
+PLOT_ERROR = False
 
 class NeuralNetwork_2Layer():
-    def __init__(self, inputSize, outputSize, neuronsPerLayer, learningRate = 0.1, activation = 'sigmoid'):
+    def __init__(self, inputSize, outputSize, neuronsPerLayer, learningRate = 0.1, activation = ACTIVATION):
         self.inputSize = inputSize
         self.outputSize = outputSize
         self.neuronsPerLayer = neuronsPerLayer
@@ -67,8 +71,8 @@ class NeuralNetwork_2Layer():
         return x
 
     def __reluDerivative(self, x):
-        x[x < 0] = 0
-        x[x > 0] = 1
+        x[x <= 0] = 0
+        x[x  > 0] = 1
         return x
 
     # Batch generator for mini-batches. Not randomized.
@@ -78,6 +82,8 @@ class NeuralNetwork_2Layer():
 
     # Training with backpropagation.
     def train(self, xVals, yVals, epochs = EPOCHS, minibatches = True, mbs = BATCH_SIZE):
+        print('HYPERPARAMETERS:\n\tnet: %s\tepochs: %s\tbatchSize: %s\thiddenSize: %s\tactivation: %s\n' %
+              (algorithm, numEpochs, batchSize, hiddenNeurons, activationFunction))
         error = list()
         for i in range(epochs):
           print("epoch:", i)
@@ -87,7 +93,8 @@ class NeuralNetwork_2Layer():
               (l1d, l2d) = self.__backpropagate(xBatch, yBatch)
               self.W1 -= self.lr * l1d
               self.W2 -= self.lr * l2d
-
+          # decay learning rate
+          self.lr -= 0.0002
           if PLOT_ERROR:
             error.append(self.__calculateError(yVals, self.predict(xVals)))
 
@@ -100,7 +107,6 @@ class NeuralNetwork_2Layer():
           plt.ylabel('mean MSE across all classes')
           plt.title('NN Learning Curve, %s Hidden Neurons' % HIDDEN_NEURONS)
           plt.legend()
-          #plt.show()
           plt.savefig('./assets/error-%s-%s.png' % (HIDDEN_NEURONS, EPOCHS))
 
     # Forward pass.
@@ -129,10 +135,10 @@ class NeuralNetwork_2Layer():
       z2, a2, z3, yHat = self.__forward(x)
       n = np.shape(y)[0]
 
-      l2e = np.multiply((yHat - y) / n, self.__sigmoidDerivative(z3))
+      l2e = np.multiply((yHat - y) / n, self.activationDerivative(z3))
       l2d = np.dot(a2.T, l2e)
 
-      l1e = np.dot(l2e, self.W2.T) * self.__sigmoidDerivative(z2)
+      l1e = np.dot(l2e, self.W2.T) * self.activationDerivative(z2)
       l1d = np.dot(x.T, l1e)
 
       return (l1d, l2d)
@@ -184,13 +190,13 @@ def trainModel(data):
     elif algorithm == "custom_net":
         print("Building and training Custom_NN.")
         #nn = NeuralNetwork_2Layer(IMAGE_SIZE, NUM_CLASSES, HIDDEN_NEURONS, activation='ReLU')
-        nn = NeuralNetwork_2Layer(IMAGE_SIZE, NUM_CLASSES, hiddenNeurons)
-        nn.train(xTrain, yTrain)
+        nn = NeuralNetwork_2Layer(IMAGE_SIZE, NUM_CLASSES, hiddenNeurons, activation=activationFunction)
+        nn.train(xTrain, yTrain, epochs=numEpochs, mbs=batchSize)
         return nn
     elif algorithm == "tf_net":
         print("Building and training TF_NN.")
         model = tf.keras.models.Sequential([tf.keras.layers.Flatten(),
-                                            tf.keras.layers.Dense(HIDDEN_NEURONS, activation=tf.nn.sigmoid),
+                                            tf.keras.layers.Dense(hiddenNeurons, activation=tf.nn.sigmoid),
                                             tf.keras.layers.Dense(NUM_CLASSES, activation=tf.nn.sigmoid)])
         model.compile(optimizer='adam', loss='mean_squared_error', metrics=['accuracy'])
         model.fit(xTrain, yTrain, validation_split=0.1, batch_size=batchSize, epochs=numEpochs, shuffle=True)
@@ -266,9 +272,10 @@ if __name__ == '__main__':
     numEpochs = EPOCHS
     batchSize = BATCH_SIZE
     hiddenNeurons = HIDDEN_NEURONS
+    activationFunction = ACTIVATION
     argv = sys.argv[1:]
     try:
-      opts, args = getopt.getopt(argv, 'a:e:b:n:h')
+      opts, args = getopt.getopt(argv, 'a:e:b:n:f:h')
     except:
       raise ValueError('Unrecognized argument')
 
@@ -277,7 +284,7 @@ if __name__ == '__main__':
         if opt in ['-a']:
           algorithm = arg
           if algorithm != 'custom_net' and algorithm != 'tf_net':
-            raise ValueError('Unrecognized algorithm. try "custom_net" or "tf_net"')
+            raise ValueError('Unrecognized algorithm. Try "custom_net" or "tf_net"')
         elif opt in ['-e']:
           numEpochs = int(arg)
           if numEpochs < 1:
@@ -290,6 +297,10 @@ if __name__ == '__main__':
           hiddenNeurons = int(arg)
           if hiddenNeurons < 1:
             raise ValueError('Number of hidden neurons must be at least 1')
+        elif opt in ['-f']:
+          activationFunction = arg
+          if activationFunction.lower() != 'sigmoid' and activationFunction.lower() != 'relu':
+            raise ValueError('Unrecognized activation function. Try "sigmoid" or "relu"')
         elif opt in ['-h']:
           print('Usage:\n\
             \t-a [algorithm | custom_net, tf_net])\n\
@@ -301,8 +312,6 @@ if __name__ == '__main__':
         raise
       except:
         raise ValueError('Invalid arguments. See -h for help')
-
-    print(algorithm, numEpochs, batchSize, hiddenNeurons)
 
     main()
 
