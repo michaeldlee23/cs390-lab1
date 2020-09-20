@@ -136,10 +136,6 @@ class NeuralNetwork_2Layer():
         if PLOT_ERROR:
           self.__plotLearningCurve(error)
 
-        for w in self.W:
-          print(w)
-          print('\n\n\n\n\n')
-
     # Forward pass.
     def __forward(self, input):
         # i inputs, j hidden neurons, k outputs, n entities
