@@ -1,0 +1,29 @@
+HYPERPARAMETERS:
+net: custom_net	epochs: 1000	batchSize: 100	neuronsPerLayer: 20	learningRate: 0.1	activation: sigmoid
+
+Classifier algorithm: custom_net
+Classifier accuracy: 93.140000%
+Classifier confusion matrix:
+[[  951.     0.    10.     2.     2.     7.    15.     2.     3.     9.  1001.]
+ [    0.  1119.     5.     2.     0.     3.     3.     8.     4.     7.  1151.]
+ [    3.     1.   936.    28.     7.     3.     6.    21.     8.     0.  1013.]
+ [    0.     6.    12.   921.     0.    28.     1.    10.    22.    19.  1019.]
+ [    2.     0.    10.     1.   921.     2.     6.     3.    10.    34.   989.]
+ [    3.     0.     6.    20.     2.   804.    14.     0.    14.     7.   870.]
+ [   12.     2.    14.     6.    13.    16.   906.     2.    10.     2.   983.]
+ [    3.     1.    12.    13.     2.     6.     2.   966.     8.    19.  1032.]
+ [    5.     6.    22.    14.     3.    20.     5.     2.   889.    11.   977.]
+ [    1.     0.     5.     3.    32.     3.     0.    14.     6.   901.   965.]
+ [  980.  1135.  1032.  1010.   982.   892.   958.  1028.   974.  1009. 10000.]]
+
+Classifier F1 score matrix:
+[[0.9601    nan    nan    nan    nan    nan    nan    nan    nan    nan]
+ [   nan 0.979     nan    nan    nan    nan    nan    nan    nan    nan]
+ [   nan    nan 0.9154    nan    nan    nan    nan    nan    nan    nan]
+ [   nan    nan    nan 0.9078    nan    nan    nan    nan    nan    nan]
+ [   nan    nan    nan    nan 0.9346    nan    nan    nan    nan    nan]
+ [   nan    nan    nan    nan    nan 0.9126    nan    nan    nan    nan]
+ [   nan    nan    nan    nan    nan    nan 0.9335    nan    nan    nan]
+ [   nan    nan    nan    nan    nan    nan    nan 0.9379    nan    nan]
+ [   nan    nan    nan    nan    nan    nan    nan    nan 0.9113    nan]
+ [   nan    nan    nan    nan    nan    nan    nan    nan    nan 0.9129]]
