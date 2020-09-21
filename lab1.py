@@ -6,6 +6,7 @@ from tensorflow import keras
 from tensorflow.keras.utils import to_categorical
 import random
 import matplotlib.pyplot as plt
+import logging
 
 # Full print numpy
 np.set_printoptions(threshold=np.inf)
@@ -25,11 +26,12 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 NUM_CLASSES = 10
 IMAGE_SIZE = 784
 
-# Net parameters
+# Net hyperparameters - defaults
 EPOCHS = 100
 HIDDEN_NEURONS = 20
 BATCH_SIZE = 100
 ACTIVATION = 'sigmoid'
+LEARNING_RATE = 0.1
 
 # Use these to set the algorithm to use.
 #ALGORITHM = "guesser"
@@ -37,10 +39,11 @@ ALGORITHM = "custom_net"
 #ALGORITHM = "tf_net"
 
 # Toggle error plotting.
-PLOT_ERROR = True
+PLOT_ERROR = False
+#PLOT_ERROR = True
 
 class NeuralNetwork_2Layer():
-    def __init__(self, inputSize, outputSize, neuronsPerLayer, learningRate = 0.1, activation = ACTIVATION):
+    def __init__(self, inputSize, outputSize, neuronsPerLayer, learningRate = LEARNING_RATE, activation = ACTIVATION):
         self.inputSize = inputSize
         self.outputSize = outputSize
         self.neuronsPerLayer = neuronsPerLayer
@@ -87,17 +90,18 @@ class NeuralNetwork_2Layer():
         plt.axhline(y=error['train'][-1], color='purple', ls='--', label='y=%s' % round(error['train'][-1], 4))
         plt.plot(x, error['valid'], color = 'red', label = 'validation error')
         plt.axhline(y=error['valid'][-1], color = 'orange', ls='--', label='y=%s' % round(error['valid'][-1], 4))
-        plt.xlabel('epoch')
-        plt.ylabel('mean MSE across all classes')
-        plt.title('NN Learning Curve, %s Hidden Neurons' % hiddenNeurons)
+        plt.xlabel('Epochs')
+        plt.ylabel('Total MSE across all classes')
+        plt.title('NN Learning Curve, %s Hidden Neurons, %s Epochs' % (hiddenNeurons, numEpochs))
         plt.legend()
         plt.savefig('./assets/error-%s-%s.png' % (hiddenNeurons, numEpochs))
 
 
     # Training with backpropagation.
     def train(self, xVals, yVals, epochs = EPOCHS, minibatches = True, mbs = BATCH_SIZE):
-        print('HYPERPARAMETERS:\n\tnet: %s\tepochs: %s\tbatchSize: %s\thiddenSize: %s\tactivation: %s\n' %
-              (algorithm, numEpochs, batchSize, hiddenNeurons, activationFunction))
+        print('HYPERPARAMETERS:\
+              \nnet: %s\tepochs: %s\tbatchSize: %s\tneuronsPerLayer: %s\tlearningRate: %s\tactivation: %s\n' %
+              (algorithm, numEpochs, batchSize, hiddenNeurons, initialLearningRate, activationFunction))
         error = {'train': [], 'valid': []}
         for i in range(epochs):
           print("epoch:", i)
@@ -190,7 +194,7 @@ def getRawData():
 
 
 def preprocessData(raw):
-    ((xTrain, yTrain), (xTest, yTest)) = raw            #TODO: Add range reduction here (0-255 ==> 0.0-1.0).
+    ((xTrain, yTrain), (xTest, yTest)) = raw
     xTrain, xTest = xTrain / 255.0, xTest / 255.0
     xTrain = xTrain.reshape(np.shape(xTrain)[0], -1)
     xTest = xTest.reshape(np.shape(xTest)[0], -1)
@@ -210,7 +214,11 @@ def trainModel(data):
         return None   # Guesser has no model, as it is just guessing.
     elif algorithm == "custom_net":
         print("Building and training Custom_NN.")
-        nn = NeuralNetwork_2Layer(IMAGE_SIZE, NUM_CLASSES, hiddenNeurons, activation=activationFunction)
+        nn = NeuralNetwork_2Layer(IMAGE_SIZE,
+                                  NUM_CLASSES,
+                                  hiddenNeurons,
+                                  initialLearningRate,
+                                  activationFunction)
         nn.train(xTrain, yTrain, epochs=numEpochs, mbs=batchSize)
         return nn
     elif algorithm == "tf_net":
@@ -230,10 +238,10 @@ def runModel(data, model):
     if algorithm == "guesser":
         return guesserClassifier(data)
     elif algorithm == "custom_net":
-        print("Testing Custom_NN.")
+        print("\nTesting Custom_NN.")
         return model.predict(data)
     elif algorithm == "tf_net":
-        print("Testing TF_NN.")
+        print("\nTesting TF_NN.")
         yHat = model.predict(data)
         # Convert prediction into single class output
         prediction = np.zeros_like(yHat)
@@ -272,13 +280,21 @@ def evalResults(data, preds):   #TODO: Add F1 score confusion matrix here.
         else:
           f1Matrix[r][c] = np.nan
 
+    # Log output to stdout and record it in outfile
+    outfile = './assets/%sacc-%s-%s.log' % ('tf-' if algorithm == 'tf_net' else '', hiddenNeurons, numEpochs)
+    logging.basicConfig(filename = outfile, filemode = 'w', format = '%(message)s', level = logging.INFO)
+    logger = logging.getLogger('lab1.log')
+    logger.addHandler(logging.FileHandler(outfile))   # Log to outfile
+    logger.addHandler(logging.StreamHandler())        # Log to stdout
     np.set_printoptions(formatter={'int': '{.6f}'.format}, precision=4, suppress=True)
-    print("Classifier algorithm: %s" % algorithm)
-    print("Classifier accuracy: %f%%" % (accuracy * 100))
-    print("Classifier confusion matrix:\n", confusionMatrix)
-    print("Classifier F1 score matrix:\n", f1Matrix)
-    print()
-
+    # For convenience of analyzing output, reprint hyperparameters
+    logger.info('HYPERPARAMETERS:\
+                \nnet: %s\tepochs: %s\tbatchSize: %s\tneuronsPerLayer: %s\tlearningRate: %s\tactivation: %s\n' %
+                (algorithm, numEpochs, batchSize, hiddenNeurons, initialLearningRate, activationFunction))
+    logger.info("Classifier algorithm: %s" % algorithm)
+    logger.info("Classifier accuracy: %f%%" % (accuracy * 100))
+    logger.info("Classifier confusion matrix:\n%s\n" % confusionMatrix)
+    logger.info("Classifier F1 score matrix:\n%s" % f1Matrix)
 
 
 #=========================<Main>================================================
@@ -299,9 +315,10 @@ if __name__ == '__main__':
     batchSize = BATCH_SIZE
     hiddenNeurons = HIDDEN_NEURONS
     activationFunction = ACTIVATION
+    initialLearningRate = LEARNING_RATE
     argv = sys.argv[1:]
     try:
-      opts, args = getopt.getopt(argv, 'a:e:b:n:f:h')
+      opts, args = getopt.getopt(argv, 'a:e:b:n:l:f:h')
     except:
       raise ValueError('Unrecognized argument')
 
@@ -309,7 +326,7 @@ if __name__ == '__main__':
       try:
         if opt in ['-a']:
           algorithm = arg
-          if algorithm != 'custom_net' and algorithm != 'tf_net':
+          if algorithm != 'guesser' and algorithm != 'custom_net' and algorithm != 'tf_net':
             raise ValueError('Unrecognized algorithm. Try "custom_net" or "tf_net"')
         elif opt in ['-e']:
           numEpochs = int(arg)
@@ -323,17 +340,22 @@ if __name__ == '__main__':
           hiddenNeurons = int(arg)
           if hiddenNeurons < 1:
             raise ValueError('Number of hidden neurons must be at least 1')
+        elif opt in ['-l']:
+          initialLearningRate = float(arg)
+          if initialLearningRate <= 0 or initialLearningRate > 1:
+            raise ValueError('Learning rate must be in range (0, 1]')
         elif opt in ['-f']:
           activationFunction = arg
           if activationFunction.lower() != 'sigmoid' and activationFunction.lower() != 'relu':
             raise ValueError('Unrecognized activation function. Try "sigmoid" or "relu"')
         elif opt in ['-h']:
           print('Usage:\n\
-            \t-a [algorithm | custom_net, tf_net])\n\
+            \t-a [algorithm | guesser, custom_net, tf_net]\n\
             \t-e [number of epochs]\n\
             \t-b [batch size]\n\
             \t-n [number of hidden neurons]\n\
-            \t-f [activation function | sigmoid, relu')
+            \t-l [initial learning rate]\n\
+            \t-f [activation function | sigmoid, relu]')
           sys.exit()
       except SystemExit as se:
         raise
