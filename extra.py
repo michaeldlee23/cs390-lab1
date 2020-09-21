@@ -38,7 +38,7 @@ ALGORITHM = "custom_net"
 #ALGORITHM = "tf_net"
 
 # Toggle error plotting.
-PLOT_ERROR = False
+PLOT_ERROR = True
 
 class NeuralNetwork_2Layer():
     def __init__(self, inputSize, outputSize, neuronsPerLayer, learningRate = 0.1, activation = ACTIVATION):
@@ -98,13 +98,14 @@ class NeuralNetwork_2Layer():
         plt.ylabel('mean MSE across all classes')
         plt.title('NN Learning Curve, %s Hidden Neurons' % hiddenNeurons)
         plt.legend()
-        plt.savefig('./assets/error-%s-%s.png' % (hiddenNeurons, numEpochs))
+        plt.savefig('./assets/error-%s-%s-%s.png' % (hiddenLayers, hiddenNeurons, numEpochs))
 
 
     # Training with backpropagation.
     def train(self, xVals, yVals, epochs = EPOCHS, minibatches = True, mbs = BATCH_SIZE):
-        print('HYPERPARAMETERS:\n\tnet: %s\tepochs: %s\tbatchSize: %s\thiddenSize: %s\tactivation: %s\n' %
-              (algorithm, numEpochs, batchSize, hiddenNeurons, activationFunction))
+        print('HYPERPARAMETERS:\
+              \nnet: %s\tepochs: %s\tbatchSize: %s\thiddenSize: %s\thiddenLayers: %s\tactivation: %s\n' %
+              (algorithm, numEpochs, batchSize, hiddenNeurons, hiddenLayers, activationFunction))
         error = {'train': [], 'valid': []}
         for i in range(epochs):
           print("epoch:", i)
@@ -209,7 +210,7 @@ def getRawData():
 
 
 def preprocessData(raw):
-    ((xTrain, yTrain), (xTest, yTest)) = raw            #TODO: Add range reduction here (0-255 ==> 0.0-1.0).
+    ((xTrain, yTrain), (xTest, yTest)) = raw
     xTrain, xTest = xTrain / 255.0, xTest / 255.0
     xTrain = xTrain.reshape(np.shape(xTrain)[0], -1)
     xTest = xTest.reshape(np.shape(xTest)[0], -1)
@@ -291,11 +292,14 @@ def evalResults(data, preds):   #TODO: Add F1 score confusion matrix here.
         else:
           f1Matrix[r][c] = np.nan
 
+    print('HYPERPARAMETERS:\
+          \nnet: %s\tepochs: %s\tbatchSize: %s\thiddenSize: %s\thiddenLayers: %s\tactivation: %s\n' %
+          (algorithm, numEpochs, batchSize, hiddenNeurons, hiddenLayers, activationFunction))
     np.set_printoptions(formatter={'int': '{.6f}'.format}, precision=4, suppress=True)
     print("Classifier algorithm: %s" % algorithm)
     print("Classifier accuracy: %f%%" % (accuracy * 100))
-    print("Classifier confusion matrix:\n", confusionMatrix)
-    print("Classifier F1 score matrix:\n", f1Matrix)
+    print("Classifier confusion matrix:\n%s\n" % confusionMatrix)
+    print("Classifier F1 score matrix:\n%s" % f1Matrix)
     print()
 
 
@@ -353,11 +357,12 @@ if __name__ == '__main__':
             raise ValueError('Number of hidden layers must be at least 1')
         elif opt in ['-h']:
           print('Usage:\n\
-            \t-a [algorithm | custom_net, tf_net])\n\
+            \t-a [algorithm | custom_net, tf_net]\n\
             \t-e [number of epochs]\n\
             \t-b [batch size]\n\
             \t-n [number of hidden neurons]\n\
-            \t-f [activation function | sigmoid, relu')
+            \t-l [number of hidden layers]\n\
+            \t-f [activation function | sigmoid, relu]')
           sys.exit()
       except SystemExit as se:
         raise
