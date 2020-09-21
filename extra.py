@@ -4,6 +4,7 @@ import numpy as np
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras.utils import to_categorical
+from sklearn.datasets import load_iris
 import random
 import matplotlib.pyplot as plt
 
@@ -23,9 +24,10 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 # Information on dataset.
 NUM_CLASSES = 10
-IMAGE_SIZE = 784
+NUM_INPUTS = 784
 
 # Net parameters
+DATASET = 'mnist'
 EPOCHS = 100
 HIDDEN_LAYERS = 1
 HIDDEN_NEURONS = 20
@@ -38,7 +40,7 @@ ALGORITHM = "custom_net"
 #ALGORITHM = "tf_net"
 
 # Toggle error plotting.
-PLOT_ERROR = True
+PLOT_ERROR = False
 
 class NeuralNetwork_2Layer():
     def __init__(self, inputSize, outputSize, neuronsPerLayer, learningRate = 0.1, activation = ACTIVATION):
@@ -153,8 +155,10 @@ class NeuralNetwork_2Layer():
     def predict(self, xVals):
         _, a = self.__forward(xVals)
         yHat = a[-1]  # Predicted output is last element of activity list
+        print(yHat)
         prediction = np.zeros_like(yHat)
         prediction[np.arange(len(yHat)), yHat.argmax(1)] = 1
+        print('\n\n\n', prediction)
         return prediction
 
     # Calculate mean error.
@@ -199,8 +203,24 @@ def guesserClassifier(xTest):
 #=========================<Pipeline Functions>==================================
 
 def getRawData():
-    mnist = tf.keras.datasets.mnist
-    (xTrain, yTrain), (xTest, yTest) = mnist.load_data()
+    if dataset == 'mnist':
+      mnist = tf.keras.datasets.mnist
+      (xTrain, yTrain), (xTest, yTest) = mnist.load_data()
+    elif dataset == 'iris':
+      iris = load_iris()
+      # Break given data into training set and test set
+      xVals, yVals = iris.data, iris.target
+      proportion = 0.3
+      partition = int(proportion * len(yVals))      # Get partition index
+      indices = np.random.permutation(len(yVals))   # Get shuffled indices
+      xValsShuffled = xVals[indices, :]             # Shuffle xVals
+      yValsShuffled = yVals[indices]                # Shuffle yVals, still aligned with xVals
+      xTrain = xValsShuffled[partition:]            # Take 1-proportion entities as training
+      yTrain = yValsShuffled[partition:]
+      xTest = xValsShuffled[:partition]            # Take proportion entities as test
+      yTest = yValsShuffled[:partition]
+    else:
+      raise ValueError('Unrecognized dataset')
     print("Shape of xTrain dataset: %s." % str(xTrain.shape))
     print("Shape of yTrain dataset: %s." % str(yTrain.shape))
     print("Shape of xTest dataset: %s." % str(xTest.shape))
@@ -211,9 +231,13 @@ def getRawData():
 
 def preprocessData(raw):
     ((xTrain, yTrain), (xTest, yTest)) = raw
-    xTrain, xTest = xTrain / 255.0, xTest / 255.0
-    xTrain = xTrain.reshape(np.shape(xTrain)[0], -1)
-    xTest = xTest.reshape(np.shape(xTest)[0], -1)
+    if dataset == 'mnist':
+      xTrain, xTest = xTrain / 255.0, xTest / 255.0
+      xTrain = xTrain.reshape(np.shape(xTrain)[0], -1)
+      xTest = xTest.reshape(np.shape(xTest)[0], -1)
+
+    global NUM_CLASSES
+    NUM_CLASSES = len(set(yTrain))  # Probably shouldn't change global constants but ¯\_(ツ)_/¯
     yTrainP = to_categorical(yTrain, NUM_CLASSES)
     yTestP = to_categorical(yTest, NUM_CLASSES)
     print("New shape of xTrain dataset: %s." % str(xTrain.shape))
@@ -230,7 +254,7 @@ def trainModel(data):
         return None   # Guesser has no model, as it is just guessing.
     elif algorithm == "custom_net":
         print("Building and training Custom_NN.")
-        nn = NeuralNetwork_2Layer(IMAGE_SIZE, NUM_CLASSES, hiddenNeurons, activation=activationFunction)
+        nn = NeuralNetwork_2Layer(len(xTrain[0]), len(yTrain[1]), hiddenNeurons, activation=activationFunction)
         nn.train(xTrain, yTrain, epochs=numEpochs, mbs=batchSize)
         return nn
     elif algorithm == "tf_net":
@@ -318,6 +342,7 @@ def main():
 if __name__ == '__main__':
     # Accept CLI args to define hyperparameters
     algorithm = ALGORITHM
+    dataset = DATASET
     numEpochs = EPOCHS
     batchSize = BATCH_SIZE
     hiddenNeurons = HIDDEN_NEURONS
@@ -325,7 +350,7 @@ if __name__ == '__main__':
     activationFunction = ACTIVATION
     argv = sys.argv[1:]
     try:
-      opts, args = getopt.getopt(argv, 'a:e:b:n:f:l:h')
+      opts, args = getopt.getopt(argv, 'a:d:e:b:n:f:l:h')
     except:
       raise ValueError('Unrecognized argument')
 
@@ -335,6 +360,10 @@ if __name__ == '__main__':
           algorithm = arg
           if algorithm != 'custom_net' and algorithm != 'tf_net':
             raise ValueError('Unrecognized algorithm. Try "custom_net" or "tf_net"')
+        elif opt in ['-d']:
+          dataset = arg
+          if dataset != 'mnist' and dataset != 'iris':
+            raise ValueError('Unrecognized dataset. Try "mnist" or "iris"')
         elif opt in ['-e']:
           numEpochs = int(arg)
           if numEpochs < 1:
@@ -358,6 +387,7 @@ if __name__ == '__main__':
         elif opt in ['-h']:
           print('Usage:\n\
             \t-a [algorithm | custom_net, tf_net]\n\
+            \t-d [dataset | mnist, iris]\n\
             \t-e [number of epochs]\n\
             \t-b [batch size]\n\
             \t-n [number of hidden neurons]\n\
